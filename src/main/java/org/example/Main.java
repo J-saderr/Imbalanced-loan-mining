@@ -28,6 +28,14 @@ import org.jfree.chart.axis.NumberAxis;
 import org.jfree.chart.plot.XYPlot;
 import org.jfree.chart.renderer.xy.XYLineAndShapeRenderer;
 
+import weka.core.Instances;
+import weka.filters.unsupervised.attribute.StringToWordVector;
+import weka.filters.supervised.instance.SMOTE;
+import java.util.Random;
+import weka.core.Instance;
+import weka.core.converters.ConverterUtils.DataSource;
+import weka.filters.Filter;
+
 public class Main {
     public static void main(String[] args) {
         SparkSession spark = SparkSession.builder()
