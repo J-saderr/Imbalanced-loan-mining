@@ -15,54 +15,6 @@ import java.util.List;
 import java.util.Random;
 
 public class Data {
-    private SparkSession spark;
-    private Dataset<Row> df;
-
-    // Constructor to initialize SparkSession and load data
-    public Data(String filePath) {
-        spark = SparkSession.builder()
-                .appName("DataPreprocessing")
-                .master("local[*]")
-                .config("spark.driver.host", "192.168.1.8")
-                .config("spark.driver.bindAddress", "127.0.0.1")
-                .config("spark.driver.port", "4040")
-                .config("spark.executor.cores", "4")
-                .config("spark.executor.memory", "4g")
-                .config("spark.ui.auth.enabled", "true")
-                .config("spark.ui.auth.secret", "secret_key")
-                .config("spark.driver.extraJavaOptions", "-Dsun.reflect.debugModuleAccessChecks=true --illegal-access=permit")
-                .getOrCreate();
-
-        // Load data
-        df = spark.read().format("csv")
-                .option("header", "true")
-                .option("inferSchema", "true")
-                .load(filePath);
-    }
-
-    // Method to get the original dataset
-    public Dataset<Row> getDataset() {
-        return df;
-    }
-
-    // Method to drop a column from the dataset
-    public Dataset<Row> dropCols(String... columnNames) {
-        for (String col : columnNames) {
-            df = df.drop(col);
-        }
-        return df;
-    }
-    // Method to describe the dataset
-    public void describeData() {
-        df.describe().show();
-    }
-
-    // Method to stop SparkSession
-    public void stopSparkSession() {
-        if (spark != null) {
-            spark.stop();
-        }
-    }
     //Convert attribute from Spark dataset to WEKA dataset
     public static ArrayList<Attribute> getAttributes(Dataset<Row> dataset) {
         ArrayList<Attribute> attributes = new ArrayList<>();
@@ -155,6 +107,4 @@ public class Data {
         }
         return splits;
     }
-
-
 }
