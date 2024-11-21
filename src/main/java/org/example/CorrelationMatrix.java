@@ -3,10 +3,9 @@ import org.apache.spark.ml.feature.VectorAssembler;
 import org.apache.spark.ml.stat.Correlation;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.apache.spark.sql.SparkSession;
 import org.apache.spark.ml.linalg.Matrix;
 public class CorrelationMatrix {
-    public static void CorrelationMatrix (Dataset<Row> df){
+    public static void CorrelationMatrixs (Dataset<Row> df){
         String[] numericCols = {"Age", "Experience", "Income", "CCAvg", "Mortgage"};
         VectorAssembler assembler = new VectorAssembler()
                 .setInputCols(numericCols)

@@ -16,7 +16,7 @@ public class Main {
         df = df.drop("ID");
 
         //Correlation matrix
-        CorrelationMatrix.CorrelationMatrix(df);
+        CorrelationMatrix.CorrelationMatrixs(df);
 
         //Check missing values & duplicated values
         df = DataProcessor.handleMissingValues(df);
