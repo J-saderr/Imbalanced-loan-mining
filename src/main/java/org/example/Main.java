@@ -48,12 +48,14 @@ public class Main {
         df = df.withColumn("CCAvg", functions.col("CCAvg").multiply(12));
 
         //Bivariate Analysis
-        //bar chart & KDE chart
+        //bar chart & KDE chart for numerical
         Visualization.showNumericalFeatureCharts(df, List.of("CCAvg", "Income", "Mortgage", "Age", "Experience"));
 
-        //Drop
+        //The distribution of the Experience is very similar to the distribution of Age, as Experience is strongly correlated with Age.
+        //Drop Experience
         df = df.drop("Experience");
-        //barchart
+
+        //barchart for categorical
         Visualization.showCategoricalFeatureCharts(df, List.of("Family", "Education", "Securities Account", "CD Account", "Online", "CreditCard"));
 
         //Train and test
