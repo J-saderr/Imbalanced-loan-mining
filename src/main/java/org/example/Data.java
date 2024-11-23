@@ -2,6 +2,9 @@ package org.example;
 
 import org.apache.spark.sql.*;
 import org.apache.spark.sql.functions;
+import weka.attributeSelection.AttributeSelection;
+import weka.attributeSelection.CfsSubsetEval;
+import weka.attributeSelection.GreedyStepwise;
 import weka.core.Attribute;
 import weka.core.DenseInstance;
 import weka.core.FastVector;
@@ -9,6 +12,8 @@ import weka.core.Instances;
 import weka.filters.Filter;
 import weka.filters.supervised.instance.SMOTE;
 import weka.filters.unsupervised.attribute.NumericToNominal;
+import weka.filters.unsupervised.attribute.Standardize;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -56,13 +61,10 @@ public class Data {
     public void describeData() {
         df.describe().show();
     }
-
-    // Method to stop SparkSession
-    public void stopSparkSession() {
-        if (spark != null) {
-            spark.stop();
-        }
+    public void showData() {
+        df.printSchema();
     }
+
     //Convert attribute from Spark dataset to WEKA dataset
     public static ArrayList<Attribute> getAttributes(Dataset<Row> dataset) {
         ArrayList<Attribute> attributes = new ArrayList<>();
@@ -92,6 +94,35 @@ public class Data {
         return -1; // Not found
     }
 
+    public static Instances numToNor(Instances df, String cols) throws Exception {
+        // Split the comma-separated column names into a list
+        List<String> colNames = Arrays.asList(cols.split(",\\s*"));
+
+        // Find the indices of the specified columns
+        List<Integer> indices = new ArrayList<>();
+        for (String col : colNames) {
+            Attribute attr = df.attribute(col);
+            if (attr == null) {
+                throw new IllegalArgumentException("Column name not found: " + col);
+            }
+            if (!attr.isNumeric()) {
+                throw new IllegalArgumentException("Column is not numeric: " + col);
+            }
+            indices.add(attr.index() + 1); // Convert 0-based index to 1-based index
+        }
+
+        // Convert the indices list to a comma-separated string
+        String indicesStr = indices.toString().replaceAll("[\\[\\] ]", "");
+
+        // Initialize and configure the NumericToNominal filter
+        NumericToNominal numToNo = new NumericToNominal();
+        numToNo.setAttributeIndices(indicesStr); // Set the indices of attributes to convert
+        numToNo.setInputFormat(df); // Configure the filter with the input dataset
+
+        // Apply the filter and return the modified dataset
+        return Filter.useFilter(df, numToNo);
+    }
+
     //Convert to WEKA Instances
     public static Instances WEKAdata(Dataset<Row> dataset) {
         // Get attributes from the dataset using the helper method
@@ -117,19 +148,21 @@ public class Data {
 
         return wekaInstances;
     }
+    //Method standardized data
+    public static Instances scaleAttributes(Instances data) throws Exception {
+        Standardize standardizeFilter = new Standardize();
+        standardizeFilter.setInputFormat(data);
+        Instances scaledData = Filter.useFilter(data, standardizeFilter);
+
+        return scaledData;
+    }
 
 
+    public static Instances[][] splitTrainAndTest(Instances df, int folds, int randomSeed, int classIndex) throws Exception {
 
-    public static Instances[][] splitTrainAndTest(Instances data, int folds, int randomSeed, int classIndex) throws Exception {
-
-        //Change Target value to nominal data type because SMOTE requires that.
-        NumericToNominal numToNo = new NumericToNominal();
-        numToNo.setAttributeIndices(String.valueOf(classIndex + 1));
-        numToNo.setInputFormat(data);
-        Instances df = Filter.useFilter(data,numToNo);
         df.setClassIndex(classIndex);
 
-        //Instances df = convertToNominal(data, classIndex);
+
         df.randomize(new Random(randomSeed));
 
         // Initialize splits array: [fold][0 for train, 1 for test]

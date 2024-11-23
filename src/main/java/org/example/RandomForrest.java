@@ -11,25 +11,25 @@ import weka.classifiers.Evaluation;
 import weka.classifiers.trees.RandomForest;
 
 public class RandomForrest {
-    private Dataset<Row> df;
-    private Instances wekaDf;
+    private Instances df;
     private String targetCol;
     private int classIndex;
 
 
-    public RandomForrest(Dataset<Row> df, String targetCol) throws Exception {
+    public RandomForrest(Instances df, String targetCol) throws Exception {
         this.df = df;
         this.targetCol = targetCol;
-
-        // Convert Spark DataFrame to Weka Instances
-        this.wekaDf = WEKAdata(df);
-        this.classIndex = getAttributeIndex(targetCol, wekaDf);
+        this.classIndex = getAttributeIndex(targetCol, df);
     }
 
     public void trainRF() throws Exception {
         // Split train and test
-        Instances[][] splits = splitTrainAndTest(wekaDf, 10, 42, classIndex);
+        Instances[][] splits = splitTrainAndTest(df, 10, 42, classIndex);
         Evaluation[] evals = new Evaluation[10];
+        //Final overall scores
+        double totalAccuracy = 0;
+        double totalF1score = 0;
+
         // Loop through each fold for evaluation
         for (int fold = 0; fold < 10; fold++) {
             Instances trainingSet = splits[fold][0];
@@ -43,12 +43,20 @@ public class RandomForrest {
             evals[fold] = new Evaluation(trainingSet);
             evals[fold].evaluateModel(classifier, testingSet);
 
+
+
             // Print evaluation results
             System.out.println("Fold | Class | Precision | Recall | F1 Score");
             for (int i = 0; i < trainingSet.numClasses(); i++) {
-                System.out.printf("%-5d| %-6d| %-9.2f| %-7.2f| %-9.2f\n",
+                System.out.printf("%-5d| %-6d| %-9.5f| %-7.5f| %-9.5f\n",
                         fold + 1, i, evals[fold].precision(i), evals[fold].recall(i), evals[fold].fMeasure(i));
             }
+            double foldF1 = 0;
+            for (int i = 0; i < trainingSet.numClasses(); i++) {
+                foldF1 += evals[fold].fMeasure(i); // Sum the F1 scores for each class
+            }
+
+            totalF1score += foldF1 / trainingSet.numClasses();
 
         // Calculate macro and weighted averages for precision, recall, and F1 score
             double macroPrecision = 0, macroRecall = 0, macroF1 = 0;
@@ -75,10 +83,18 @@ public class RandomForrest {
             macroRecall /= trainingSet.numClasses();
             macroF1 /= trainingSet.numClasses();
 
-            System.out.printf("     | Macro  | %-9.2f| %-7.2f| %-9.2f\n", macroPrecision, macroRecall, macroF1);
-            System.out.printf("     | Weighted | %-9.2f| %-7.2f| %-9.2f\n", weightedPrecision, weightedRecall, weightedF1);
-            System.out.printf("     | Accuracy | %-9.2f\n", evals[fold].pctCorrect() / 100.0);
+            // Accuracy for the current fold
+            double foldAccuracy = evals[fold].pctCorrect() / 100.0;
+            totalAccuracy += foldAccuracy;
 
+            System.out.printf("     | Macro  | %-9.5f| %-7.5f| %-9.5f\n", macroPrecision, macroRecall, macroF1);
+            System.out.printf("     | Weighted | %-9.5f| %-7.5f| %-9.5f\n", weightedPrecision, weightedRecall, weightedF1);
+            System.out.printf("     | Accuracy | %-9.5f\n", evals[fold].pctCorrect() / 100.0);
         }
+        double finalAccuracy = totalAccuracy /10;
+        System.out.printf("\nFinal Accuracy over %d folds: %-9.5f\n", 10, finalAccuracy);
+
+        double finalF1score = totalF1score/10;
+        System.out.printf("\nFinal F1 Score over %d folds: %-9.5f\n", 10, finalF1score);
     }
 }

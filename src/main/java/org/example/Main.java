@@ -1,17 +1,10 @@
 package org.example;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-
-import java.util.*;
-import java.util.List;
-
-import weka.classifiers.Classifier;
-import weka.classifiers.Evaluation;
-import weka.classifiers.trees.RandomForest;
-import weka.core.Attribute;
 import weka.core.Instances;
 
-import static org.example.Data.*;
+import static org.example.Data.WEKAdata;
+import static org.example.Data.numToNor;
 
 public class Main {
 
@@ -20,36 +13,30 @@ public class Main {
         Data df = new Data("src/main/resources/data_imbalance_loan.csv");
         Dataset<Row> processedDf = df.dropCols("ID", "Experience");
 
-        // Convert Spark Dataset<Row> to Weka Instances
-        Instances wekaDf = WEKAdata(processedDf);
-
-        //Set class index
-        int classIndex = getAttributeIndex("Personal Loan", wekaDf);
 
 
-        //Split train and test
-        Instances[][] splits = splitTrainAndTest(wekaDf, 10, 42, classIndex);
 
-        for (int fold = 0; fold < 10; fold++) {
-            Instances trainingSet = splits[fold][0];
-            Instances testingSet = splits[fold][1];
+        Instances weka = WEKAdata(processedDf);
+        weka = numToNor(weka,"Securities Account, CD Account, Online, CreditCard, Personal Loan");
 
-            // Now you can train a classifier on trainingSet and evaluate on testingSet
-            Classifier classifier = new RandomForest(); // Or any other classifier
-            classifier.buildClassifier(trainingSet);
+//        DecisionTree classifier2 = new DecisionTree(weka,"Personal Loan");
+//        classifier2.trainDT();
 
-            // Evaluate model on the testing set
-            Evaluation eval = new Evaluation(trainingSet);
-            eval.evaluateModel(classifier, testingSet);
+        //Classifier 1
+//        RandomForrest rf = new RandomForrest(weka, "Personal Loan");
+//        rf.trainRF();
 
-            // Print evaluation results for each fold
-            System.out.println("Fold | Class | Precision | Recall | F1 Score");
+        //Classifier 3
+        kNN knn = new kNN(weka,"Personal Loan");
+        knn.trainKNN();
 
-                // Iterate over each class
-            for (int i = 0; i < trainingSet.numClasses(); i++) {
-            System.out.printf("%-5d| %-6d| %-9.2f| %-7.2f| %-9.2f\n", fold + 1, i, eval.precision(i), eval.recall(i), eval.fMeasure(i));
-            }
-        }
+
+
+
+
+
+
+
 
 
 
