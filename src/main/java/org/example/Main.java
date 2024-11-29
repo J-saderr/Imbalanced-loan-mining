@@ -2,33 +2,55 @@ package org.example;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import weka.core.Instances;
+import weka.core.converters.ConverterUtils.DataSource;
 
-import static org.example.Data.WEKAdata;
-import static org.example.Data.numToNor;
+import static org.example.Data.*;
 
 public class Main {
 
     public static void main(String[] args) throws Exception {
 
         Data df = new Data("src/main/resources/data_imbalance_loan.csv");
-        Dataset<Row> processedDf = df.dropCols("ID", "Experience");
+//        df.showData();
+
+//        Data for Decision Tree
+//        Dataset<Row> DTdata = df.dropCols("ID", "Experience","Online");
+//        Instances DTdf = WEKAdata(DTdata);
+//        DTdf = numToNor(DTdf,"Securities Account, CD Account, CreditCard, Personal Loan");
+//
+//        //Get class index
+//        int classIndex1 = getAttributeIndex("Personal Loan",DTdf);
+////
+//        Instances smotedDTdf = applySMOTE(DTdf, classIndex1);
+
+        //Decision Tree model
+        //DecisionTree classifier2 = new DecisionTree(smotedDTdf,"Personal Loan");
+        //classifier2.trainDT();
+
+        //Data for Random Forrest
+        Dataset<Row> RFdata = df.dropCols("ID");
+        Instances RFdf = WEKAdata(RFdata);
+        RFdf = numToNor(RFdf,"Securities Account, CD Account, Online, CreditCard, Personal Loan");
+        int classIndex2 = getAttributeIndex("Personal Loan",RFdf);
+
+        Instances smotedRFdf = applySMOTE(RFdf, classIndex2);
+
+        //Random Forrest model
+        RandomForrest rf = new RandomForrest(smotedRFdf, "Personal Loan");
+        rf.trainRF();
+
+
+//        Instances[][] split = splitTrainAndTestWithCounts(smotedDTdf,10,42,classIndex1);
+//        System.out.println(split[0][0]);
 
 
 
-
-        Instances weka = WEKAdata(processedDf);
-        weka = numToNor(weka,"Securities Account, CD Account, Online, CreditCard, Personal Loan");
-
-//        DecisionTree classifier2 = new DecisionTree(weka,"Personal Loan");
-//        classifier2.trainDT();
-
-        //Classifier 1
-//        RandomForrest rf = new RandomForrest(weka, "Personal Loan");
-//        rf.trainRF();
 
         //Classifier 3
-        kNN knn = new kNN(weka,"Personal Loan");
-        knn.trainKNN();
+//        kNN knn = new kNN(weka,"Personal Loan");
+//        knn.trainKNN()
+
+
 
 
 

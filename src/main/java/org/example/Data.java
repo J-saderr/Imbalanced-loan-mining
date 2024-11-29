@@ -19,6 +19,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 
+import static java.lang.Math.abs;
+
 public class Data {
     private SparkSession spark;
     private Dataset<Row> df;
@@ -57,10 +59,12 @@ public class Data {
         }
         return df;
     }
+
     // Method to describe the dataset
     public void describeData() {
         df.describe().show();
     }
+
     public void showData() {
         df.printSchema();
     }
@@ -84,6 +88,7 @@ public class Data {
 
         return attributes;
     }
+
     //Get attribute index
     public static int getAttributeIndex(String columnName, Instances wekaInstances) {
         for (int i = 0; i < wekaInstances.numAttributes(); i++) {
@@ -148,6 +153,7 @@ public class Data {
 
         return wekaInstances;
     }
+
     //Method standardized data
     public static Instances scaleAttributes(Instances data) throws Exception {
         Standardize standardizeFilter = new Standardize();
@@ -157,13 +163,47 @@ public class Data {
         return scaledData;
     }
 
+    public static int countClassInstances(Instances df, int classValue) {
+        int count = 0;
+        for (int i = 0; i < df.numInstances(); i++) {
+            if (df.instance(i).classValue() == classValue) {
+                count++;
+            }
+        }
+        return count;
+    }
 
-    public static Instances[][] splitTrainAndTest(Instances df, int folds, int randomSeed, int classIndex) throws Exception {
-
+    public static Instances applySMOTE(Instances df, int classIndex) throws Exception {
         df.setClassIndex(classIndex);
 
+        int class0Count = countClassInstances(df, 0);
+        int class1Count = countClassInstances(df, 1);
+        int difference = abs(class1Count - class0Count);
 
+        // Apply SMOTE iteratively to balance the classes
+        while (difference > 10) {
+            SMOTE smote = new SMOTE();
+
+            // Target the class with fewer instances to match the larger class
+            if (class0Count < class1Count) {
+                smote.setPercentage((class1Count - class0Count) * 100 / class0Count);
+            } else {
+                smote.setPercentage((class0Count - class1Count) * 100 / class1Count);
+            }
+            smote.setInputFormat(df);  // Define the input format for SMOTE
+            df = Filter.useFilter(df, smote);  // Apply SMOTE
+
+            class0Count = countClassInstances(df, 0);
+            class1Count = countClassInstances(df, 1);
+            difference = abs(class1Count - class0Count);
+        }
+        return df;
+    }
+
+
+    public static Instances[][] splitTrainAndTest(Instances df, int folds, int randomSeed, int classIndex) throws Exception {
         df.randomize(new Random(randomSeed));
+        df.setClassIndex(classIndex);
 
         // Initialize splits array: [fold][0 for train, 1 for test]
         Instances[][] splits = new Instances[folds][2];
@@ -177,17 +217,11 @@ public class Data {
             trainingSet.setClassIndex(df.classIndex());
             testingSet.setClassIndex(df.classIndex());
 
-            // Apply SMOTE to the training set
-            SMOTE smote = new SMOTE();
-            smote.setInputFormat(trainingSet);  // Define the input format for SMOTE
-            Instances trainingSetSmote = Filter.useFilter(trainingSet, smote);  // Apply SMOTE to the training set
-
             // Save the current fold's training and testing datasets
-            splits[fold][0] = trainingSetSmote;
+            splits[fold][0] = trainingSet;
             splits[fold][1] = testingSet;
+
         }
         return splits;
     }
-
-
 }
