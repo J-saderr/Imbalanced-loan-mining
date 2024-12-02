@@ -12,8 +12,10 @@ import weka.classifiers.Evaluation;
 import weka.classifiers.trees.RandomForest;
 import weka.core.Attribute;
 import weka.core.Instances;
+import weka.core.converters.ConverterUtils.DataSource;
 
 import static org.example.Data.*;
+import static org.example.Visualization.plotHistogram;
 
 public class Main {
 
@@ -28,10 +30,6 @@ public class Main {
         //Correlation matrix
         CorrelationMatrix.CorrelationMatrixs(df);
 
-        //Check missing values & duplicated values
-        df = DataProcessor.handleMissingValues(df);
-        df = DataProcessor.dropDuplicates(df);
-
         //Print info
         System.out.println("\nSchema Information:");
         df.printSchema();
@@ -40,6 +38,13 @@ public class Main {
         System.out.println("\nDescribe statistics:");
         Dataset<Row> stats = df.describe();
         stats.show();
+
+        //Histogram
+        Visualization.plotHistogram(df, "Age", "Experience", "Income", "CCAvg", "Mortgage");
+
+        //Check missing values & duplicated values
+        df = DataProcessor.handleMissingValues(df);
+        df = DataProcessor.dropDuplicates(df);
 
         //In 'Experience', it may include negative values (min = -3) so we use abs function to turn them in to positive numbers.
         df = DataProcessor.correctNegativeValues(df);
@@ -69,14 +74,31 @@ public class Main {
         Visualization.showCategoricalFeatureCharts(df, List.of("Family", "Education", "Securities Account", "CD Account", "Online", "CreditCard"));
 
 
-        // Convert Spark Dataset<Row> to Weka Instances
-        Instances wekaDf = WEKAdata(df);
+        //Data for Decision Tree
+        Dataset<Row> DTdata = df.drop("Online");
+        Instances DTdf = WEKAdata(DTdata);
+        DTdf = numToNor(DTdf,"Securities Account, CD Account, CreditCard, Personal Loan");
 
-        //Set class index
-        int classIndex = getAttributeIndex("Personal Loan", wekaDf);
+        //Get class index
+        int classIndex1 = getAttributeIndex("Personal Loan",DTdf);
 
-        //Split train and test
-        Instances[][] splits = Data.splitTrainAndTest(wekaDf, 10, 42, classIndex);
+        Instances smotedDTdf = applySMOTE(DTdf, classIndex1);
+
+        //Decision Tree model
+        DecisionTree classifier2 = new DecisionTree(smotedDTdf,"Personal Loan");
+        classifier2.trainDT();
+
+        //Data for Random Forrest
+        Dataset<Row> RFdata = df.drop("ID");
+        Instances RFdf = WEKAdata(RFdata);
+        RFdf = numToNor(RFdf,"Securities Account, CD Account, Online, CreditCard, Personal Loan");
+        int classIndex2 = getAttributeIndex("Personal Loan",RFdf);
+
+        Instances smotedRFdf = applySMOTE(RFdf, classIndex2);
+
+        //Random Forrest model
+        RandomForrest rf = new RandomForrest(smotedRFdf, "Personal Loan");
+        rf.trainRF();
 
         spark.stop();
     }

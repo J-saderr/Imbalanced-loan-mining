@@ -5,11 +5,13 @@ import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
 import org.jfree.chart.axis.NumberAxis;
 import org.jfree.chart.plot.CategoryPlot;
+import org.jfree.chart.plot.CombinedDomainXYPlot;
 import org.jfree.chart.plot.PlotOrientation;
 import org.jfree.chart.plot.XYPlot;
 import org.jfree.chart.renderer.category.StackedBarRenderer;
 import org.jfree.chart.renderer.xy.XYLineAndShapeRenderer;
 import org.jfree.data.category.DefaultCategoryDataset;
+import org.jfree.data.statistics.HistogramDataset;
 import org.jfree.data.xy.XYSeries;
 import org.jfree.data.xy.XYSeriesCollection;
 import org.knowm.xchart.BoxChart;
@@ -23,6 +25,29 @@ import java.util.Map;
 import java.util.TreeMap;
 
 public class Visualization {
+    public static void plotHistogram(Dataset<Row> df, String... columns) {
+        JFrame frame = new JFrame("Histograms");
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setSize(1200, 800);
+        int rows = (int) Math.ceil(columns.length / 2.0);
+        JPanel panel = new JPanel(new GridLayout(rows, 2));
+        for (String column : columns) {
+            List<Double> columnData = df.select(column).as(Encoders.DOUBLE()).collectAsList();
+            double[] values = columnData.stream().mapToDouble(Double::doubleValue).toArray();
+            HistogramDataset dataset = new HistogramDataset();
+            dataset.addSeries(column, values, 50);
+            JFreeChart histogram = ChartFactory.createHistogram(
+                    "Distribution of " + column,
+                    column,
+                    "Frequency",
+                    dataset
+            );
+            panel.add(new ChartPanel(histogram));
+        }
+        frame.add(panel);
+        frame.setVisible(true);
+    }
+
     public static void showBoxPlot(Dataset<Row> df, String columnName) {
         List<Double> zipCodeValues = df.select("ZIP Code")
                 .as(Encoders.DOUBLE())
@@ -59,10 +84,16 @@ public class Visualization {
             ChartPanel barPanel = new ChartPanel(barChart);
             frameNumerical.add(barPanel);
 
-            XYSeriesCollection kdeDataset = createKdeDataset(df, feature);
-            JFreeChart kdeChart = createKdeChart(feature, kdeDataset);
-            ChartPanel kdePanel = new ChartPanel(kdeChart);
-            frameNumerical.add(kdePanel);
+            XYSeriesCollection loan0Dataset = new XYSeriesCollection(createKdeSeries(df, feature, 0));
+            JFreeChart loan0KdeChart = createKdeChart(feature, loan0Dataset, "Loan 0");
+            ChartPanel loan0Panel = new ChartPanel(loan0KdeChart);
+            frameNumerical.add(loan0Panel);
+
+            // KDE Plot for Loan 1
+            XYSeriesCollection loan1Dataset = new XYSeriesCollection(createKdeSeries(df, feature, 1));
+            JFreeChart loan1KdeChart = createKdeChart(feature, loan1Dataset, "Loan 1");
+            ChartPanel loan1Panel = new ChartPanel(loan1KdeChart);
+            frameNumerical.add(loan1Panel);
         }
 
         frameNumerical.setVisible(true);
@@ -155,24 +186,12 @@ public class Visualization {
     }
 
     //KDE numerical
-    private static XYSeriesCollection createKdeDataset(Dataset<Row> df, String feature) {
-        XYSeries series0 = new XYSeries("Loan 0");
-        XYSeries series1 = new XYSeries("Loan 1");
-
-        List<Row> loan0Data = df.filter("`Personal Loan` = 0").select(feature).collectAsList();
-        List<Row> loan1Data = df.filter("`Personal Loan` = 1").select(feature).collectAsList();
-
-        Map<Double, Double> kdeLoan0 = computeKDE(loan0Data);
-        Map<Double, Double> kdeLoan1 = computeKDE(loan1Data);
-
-        kdeLoan0.forEach((x, y) -> series0.add(x, y));
-        kdeLoan1.forEach((x, y) -> series1.add(x, y));
-
-        XYSeriesCollection dataset = new XYSeriesCollection();
-        dataset.addSeries(series0);
-        dataset.addSeries(series1);
-
-        return dataset;
+    private static XYSeries createKdeSeries(Dataset<Row> df, String feature, int loanType) {
+        XYSeries series = new XYSeries("Loan " + loanType);
+        List<Row> loanData = df.filter("`Personal Loan` = " + loanType).select(feature).collectAsList();
+        Map<Double, Double> kdeData = computeKDE(loanData);
+        kdeData.forEach(series::add);
+        return series;
     }
 
     private static Map<Double, Double> computeKDE(List<Row> data) {
@@ -198,22 +217,18 @@ public class Visualization {
 
         return kde;
     }
-    private static JFreeChart createKdeChart(String feature, XYSeriesCollection dataset) {
+
+    private static JFreeChart createKdeChart(String feature, XYSeriesCollection dataset, String loanType) {
         JFreeChart chart = ChartFactory.createXYLineChart(
-                "KDE Plot: " + feature + " vs Personal Loan",
+                "KDE Plot: " + feature + " (" + loanType + ")",
                 feature,
                 "Density",
-                dataset,
-                PlotOrientation.VERTICAL,
-                true,
-                true,
-                false
+                dataset
         );
 
         XYPlot plot = (XYPlot) chart.getPlot();
         XYLineAndShapeRenderer renderer = new XYLineAndShapeRenderer();
-        renderer.setSeriesPaint(0, Color.BLUE); // Loan 0 (Personal Loan = 0)
-        renderer.setSeriesPaint(1, Color.RED); // Loan 1 (Personal Loan = 1)
+        renderer.setSeriesPaint(0, loanType.equals("Loan 0") ? Color.BLUE : Color.RED);
         plot.setRenderer(renderer);
 
         NumberAxis yAxis = (NumberAxis) plot.getRangeAxis();

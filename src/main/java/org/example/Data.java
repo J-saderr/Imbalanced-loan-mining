@@ -2,6 +2,9 @@ package org.example;
 
 import org.apache.spark.sql.*;
 import org.apache.spark.sql.functions;
+import weka.attributeSelection.AttributeSelection;
+import weka.attributeSelection.CfsSubsetEval;
+import weka.attributeSelection.GreedyStepwise;
 import weka.core.Attribute;
 import weka.core.DenseInstance;
 import weka.core.FastVector;
@@ -9,10 +12,14 @@ import weka.core.Instances;
 import weka.filters.Filter;
 import weka.filters.supervised.instance.SMOTE;
 import weka.filters.unsupervised.attribute.NumericToNominal;
+import weka.filters.unsupervised.attribute.Standardize;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
+
+import static java.lang.Math.abs;
 
 public class Data {
     //Convert attribute from Spark dataset to WEKA dataset
@@ -34,6 +41,7 @@ public class Data {
 
         return attributes;
     }
+
     //Get attribute index
     public static int getAttributeIndex(String columnName, Instances wekaInstances) {
         for (int i = 0; i < wekaInstances.numAttributes(); i++) {
@@ -42,6 +50,35 @@ public class Data {
             }
         }
         return -1; // Not found
+    }
+
+    public static Instances numToNor(Instances df, String cols) throws Exception {
+        // Split the comma-separated column names into a list
+        List<String> colNames = Arrays.asList(cols.split(",\\s*"));
+
+        // Find the indices of the specified columns
+        List<Integer> indices = new ArrayList<>();
+        for (String col : colNames) {
+            Attribute attr = df.attribute(col);
+            if (attr == null) {
+                throw new IllegalArgumentException("Column name not found: " + col);
+            }
+            if (!attr.isNumeric()) {
+                throw new IllegalArgumentException("Column is not numeric: " + col);
+            }
+            indices.add(attr.index() + 1); // Convert 0-based index to 1-based index
+        }
+
+        // Convert the indices list to a comma-separated string
+        String indicesStr = indices.toString().replaceAll("[\\[\\] ]", "");
+
+        // Initialize and configure the NumericToNominal filter
+        NumericToNominal numToNo = new NumericToNominal();
+        numToNo.setAttributeIndices(indicesStr); // Set the indices of attributes to convert
+        numToNo.setInputFormat(df); // Configure the filter with the input dataset
+
+        // Apply the filter and return the modified dataset
+        return Filter.useFilter(df, numToNo);
     }
 
     //Convert to WEKA Instances
@@ -70,19 +107,56 @@ public class Data {
         return wekaInstances;
     }
 
+    //Method standardized data
+    public static Instances scaleAttributes(Instances data) throws Exception {
+        Standardize standardizeFilter = new Standardize();
+        standardizeFilter.setInputFormat(data);
+        Instances scaledData = Filter.useFilter(data, standardizeFilter);
 
+        return scaledData;
+    }
 
-    public static Instances[][] splitTrainAndTest(Instances data, int folds, int randomSeed, int classIndex) throws Exception {
+    public static int countClassInstances(Instances df, int classValue) {
+        int count = 0;
+        for (int i = 0; i < df.numInstances(); i++) {
+            if (df.instance(i).classValue() == classValue) {
+                count++;
+            }
+        }
+        return count;
+    }
 
-        //Change Target value to nominal data type because SMOTE requires that.
-        NumericToNominal numToNo = new NumericToNominal();
-        numToNo.setAttributeIndices(String.valueOf(classIndex + 1));
-        numToNo.setInputFormat(data);
-        Instances df = Filter.useFilter(data,numToNo);
+    public static Instances applySMOTE(Instances df, int classIndex) throws Exception {
         df.setClassIndex(classIndex);
 
-        //Instances df = convertToNominal(data, classIndex);
+        int class0Count = countClassInstances(df, 0);
+        int class1Count = countClassInstances(df, 1);
+        int difference = abs(class1Count - class0Count);
+
+        // Apply SMOTE iteratively to balance the classes
+        while (difference > 10) {
+            SMOTE smote = new SMOTE();
+
+            // Target the class with fewer instances to match the larger class
+            if (class0Count < class1Count) {
+                smote.setPercentage((class1Count - class0Count) * 100 / class0Count);
+            } else {
+                smote.setPercentage((class0Count - class1Count) * 100 / class1Count);
+            }
+            smote.setInputFormat(df);  // Define the input format for SMOTE
+            df = Filter.useFilter(df, smote);  // Apply SMOTE
+
+            class0Count = countClassInstances(df, 0);
+            class1Count = countClassInstances(df, 1);
+            difference = abs(class1Count - class0Count);
+        }
+        return df;
+    }
+
+
+    public static Instances[][] splitTrainAndTest(Instances df, int folds, int randomSeed, int classIndex) throws Exception {
         df.randomize(new Random(randomSeed));
+        df.setClassIndex(classIndex);
 
         // Initialize splits array: [fold][0 for train, 1 for test]
         Instances[][] splits = new Instances[folds][2];
@@ -96,14 +170,10 @@ public class Data {
             trainingSet.setClassIndex(df.classIndex());
             testingSet.setClassIndex(df.classIndex());
 
-            // Apply SMOTE to the training set
-            SMOTE smote = new SMOTE();
-            smote.setInputFormat(trainingSet);  // Define the input format for SMOTE
-            Instances trainingSetSmote = Filter.useFilter(trainingSet, smote);  // Apply SMOTE to the training set
-
             // Save the current fold's training and testing datasets
-            splits[fold][0] = trainingSetSmote;
+            splits[fold][0] = trainingSet;
             splits[fold][1] = testingSet;
+
         }
         return splits;
     }
